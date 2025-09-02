@@ -3,6 +3,8 @@
 ACTION=$1
 SERVICE=$2
 BRIDGE=virbr-fc
+USER="firecracker"
+GROUP="kvm" #or use the "firecracker" group as fits your env
 
 # Use full paths for NixOS
 IP_CMD="ip"
@@ -13,7 +15,7 @@ if [ "$ACTION" == "setup" ]; then
   ${IP_CMD} link delete tap-fc${SERVICE} 2>/dev/null || true
 
   # Create the device, add it to the bridge, and bring it up
-  ${IP_CMD} tuntap add tap-fc${SERVICE} mode tap group kvm
+  ${IP_CMD} tuntap add tap-fc${SERVICE} mode tap user ${USER} group ${GROUP}
   ${IP_CMD} link set tap-fc${SERVICE} master ${BRIDGE}
   ${IP_CMD} link set tap-fc${SERVICE} up
 
