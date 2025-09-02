@@ -1,0 +1,24 @@
+#!/bin/bash
+
+ACTION=$1
+SERVICE=$2
+BRIDGE=virbr-fc
+
+if [ "$ACTION" == "setup" ]; then
+  # Clear out dangling devices and links
+  rm -f /run/firecracker/fc-${SERVICE}.sock || true
+  ${iproute2}/bin/ip link delete tap-fc${SERVICE} 2>/dev/null || true
+
+  # Create the device, add it to the bridge, and bring it up
+  ${iproute2}/bin/ip tuntap add tap-fc${SERVICE} mode tap group kvm
+  ${iproute2}/bin/ip link set tap-fc${SERVICE} master ${BRIDGE}
+  ${iproute2}/bin/ip link set tap-fc${SERVICE} up
+
+elif [ "$ACTION" == "teardown" ]; then
+  # Delete the link
+  ${iproute2}/bin/ip link delete tap-fc${SERVICE} 2>/dev/null || true
+
+else
+  echo "Invalid action, pick 'setup' or 'teardown'"
+  exit 3
+fi
