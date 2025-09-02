@@ -22,6 +22,7 @@ if [ "$ACTION" == "setup" ]; then
 elif [ "$ACTION" == "teardown" ]; then
   # Delete the link
   ${IP_CMD} link delete tap-fc${SERVICE} 2>/dev/null || true
+  rm -rf /firecracker/sock/fc-${SERVICE}.sock
 
 else
   echo "Invalid action, pick 'setup' or 'teardown'"
