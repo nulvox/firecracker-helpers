@@ -11,3 +11,6 @@ This tool takes a firecracker commit hash or release version and a few optional 
 This accepts a dockerfile, or docker image and builds a matching firecracker rootfs from it. The image has a newly generated unencrypted ssh key for immediate access, all required faculties for firecracker support, and is properly packed into a .ext4 file. 
 This allows easy setup of new target environments without the need to manually administer the server before use. This also allows for integration in decalrative systems and CI pipelines. 
 
+## firecracker-helpers.nix
+A .nix file for use with flakes to install these tools for use in NixOS. Not properly published, to be used with flakes.
+
