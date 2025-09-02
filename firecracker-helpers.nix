@@ -5,6 +5,7 @@
 , makeWrapper
 , wrapperDir ? "/run/wrappers/bin" # NixOS security wrappers location
 , curl
+, iproute2
 , wget
 , docker
 , e2fsprogs
