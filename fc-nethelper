@@ -5,7 +5,7 @@ SERVICE=$2
 BRIDGE=virbr-fc
 
 # Use full paths for NixOS
-IP_CMD="/run/current-system/sw/bin/ip"
+IP_CMD="ip"
 
 if [ "$ACTION" == "setup" ]; then
   # Clear out dangling devices and links
