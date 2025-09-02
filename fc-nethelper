@@ -7,7 +7,7 @@ USER="firecracker"
 GROUP="kvm" #or use the "firecracker" group as fits your env
 
 # Use full paths for NixOS
-IP_CMD="ip"
+IP_CMD="/run/current-system/sw/bin/ip"
 
 if [ "$ACTION" == "setup" ]; then
   # Clear out dangling devices and links
