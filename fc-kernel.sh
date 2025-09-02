@@ -199,6 +199,161 @@ echo "$found_files" | while read -r file; do
 done
 
 echo ""
+
+# Fetch kernel command line parameters from CI configuration
+fetch_kernel_cmdline() {
+    echo "Fetching kernel command line parameters from CI configuration..."
+    
+    # Common paths where CI config files might contain kernel cmdline
+    local config_paths=(
+        "tests/framework/utils.py"
+        "tests/integration_tests/functional/test_api.py"
+        "tests/integration_tests/performance/test_network_performance.py"
+        "tests/integration_tests/build/test_build_and_run.py"
+        "tools/devctr"
+        ".buildkite/pipeline.yml"
+        ".github/workflows"
+    )
+    
+    local cmdline_file="$OUTPUT_DIR/kernel_cmdline_params.txt"
+    local config_file="$OUTPUT_DIR/firecracker_config_template.json"
+    
+    echo "Searching for kernel command line parameters in CI files..."
+    
+    # Try to fetch common configuration files that contain kernel cmdline
+    local base_url="https://raw.githubusercontent.com/firecracker-microvm/firecracker/$COMMIT_HASH"
+    
+    # Check utils.py for default kernel cmdline
+    local utils_url="$base_url/tests/framework/utils.py"
+    if curl -s -f "$utils_url" -o /tmp/utils.py 2>/dev/null; then
+        echo "Analyzing tests/framework/utils.py for kernel parameters..."
+        
+        # Extract kernel command line parameters
+        if grep -n "kernel.*cmdline\|boot.*args\|console=ttyS0" /tmp/utils.py > /tmp/kernel_params.txt 2>/dev/null; then
+            {
+                echo "# Kernel command line parameters found in tests/framework/utils.py"
+                echo "# Commit: $COMMIT_HASH"
+                echo "# Source: $utils_url"
+                echo ""
+                
+                # Extract common parameters
+                grep -o "console=[^[:space:]\"']*" /tmp/utils.py | head -1 || echo "console=ttyS0"
+                grep -o "reboot=[^[:space:]\"']*" /tmp/utils.py | head -1 || true
+                grep -o "panic=[^[:space:]\"']*" /tmp/utils.py | head -1 || echo "panic=1"
+                grep -o "pci=[^[:space:]\"']*" /tmp/utils.py | head -1 || true
+                grep -o "i8042[^[:space:]\"']*" /tmp/utils.py | head -1 || true
+                
+                echo ""
+                echo "# Full matches from source:"
+                cat /tmp/kernel_params.txt | sed 's/^/# /'
+                
+            } > "$cmdline_file"
+            
+            echo "  ✓ Kernel cmdline saved to: $cmdline_file"
+        fi
+        
+        rm -f /tmp/utils.py /tmp/kernel_params.txt
+    fi
+    
+    # Try to get a sample firecracker configuration
+    local config_urls=(
+        "$base_url/tests/integration_tests/functional/test_api.py"
+        "$base_url/tests/framework/microvm.py"
+        "$base_url/resources/tests/test_config.json"
+    )
+    
+    for config_url in "${config_urls[@]}"; do
+        if curl -s -f "$config_url" -o /tmp/config_source 2>/dev/null; then
+            echo "Analyzing $(basename "$config_url") for Firecracker configuration..."
+            
+            # Look for JSON configuration patterns
+            if grep -A 50 -B 5 '"boot-source"\|"kernel_image_path"\|"kernel_args"' /tmp/config_source > /tmp/config_extract.txt 2>/dev/null; then
+                {
+                    echo "{"
+                    echo "  \"boot-source\": {"
+                    echo "    \"kernel_image_path\": \"./vmlinux\","
+                    echo "    \"boot_args\": \"$(cat "$cmdline_file" 2>/dev/null | grep -v '^#' | tr '\n' ' ' | sed 's/  */ /g' | sed 's/^ *//;s/ *$//' || echo 'console=ttyS0 reboot=k panic=1 pci=off')\","
+                    echo "    \"initrd_path\": null"
+                    echo "  },"
+                    echo "  \"drives\": ["
+                    echo "    {"
+                    echo "      \"drive_id\": \"rootfs\","
+                    echo "      \"path_on_host\": \"./rootfs.ext4\","
+                    echo "      \"is_root_device\": true,"
+                    echo "      \"is_read_only\": false"
+                    echo "    }"
+                    echo "  ],"
+                    echo "  \"machine-config\": {"
+                    echo "    \"vcpu_count\": 1,"
+                    echo "    \"mem_size_mib\": 128"
+                    echo "  }"
+                    echo "}"
+                } > "$config_file"
+                
+                echo "  ✓ Sample Firecracker config saved to: $config_file"
+                break
+            fi
+            
+            rm -f /tmp/config_source /tmp/config_extract.txt
+        fi
+    done
+    
+    # If we couldn't find specific parameters, provide sensible defaults
+    if [[ ! -f "$cmdline_file" ]]; then
+        {
+            echo "# Default kernel command line parameters for Firecracker"
+            echo "# Commit: $COMMIT_HASH (defaults used - no specific params found)"
+            echo ""
+            echo "console=ttyS0"
+            echo "reboot=k"
+            echo "panic=1"
+            echo "pci=off"
+        } > "$cmdline_file"
+        echo "  ✓ Default kernel cmdline saved to: $cmdline_file"
+    fi
+    
+    if [[ ! -f "$config_file" ]]; then
+        {
+            echo "{"
+            echo "  \"boot-source\": {"
+            echo "    \"kernel_image_path\": \"./vmlinux\","
+            echo "    \"boot_args\": \"console=ttyS0 reboot=k panic=1 pci=off\","
+            echo "    \"initrd_path\": null"
+            echo "  },"
+            echo "  \"drives\": ["
+            echo "    {"
+            echo "      \"drive_id\": \"rootfs\","
+            echo "      \"path_on_host\": \"./rootfs.ext4\","
+            echo "      \"is_root_device\": true,"
+            echo "      \"is_read_only\": false"
+            echo "    }"
+            echo "  ],"
+            echo "  \"machine-config\": {"
+            echo "    \"vcpu_count\": 1,"
+            echo "    \"mem_size_mib\": 128"
+            echo "  }"
+            echo "}"
+        } > "$config_file"
+        echo "  ✓ Default Firecracker config saved to: $config_file"
+    fi
+}
+
+# Fetch kernel command line parameters
+fetch_kernel_cmdline
+
+echo ""
 echo "Download complete!"
 echo "Files saved to: $OUTPUT_DIR"
 ls -la "$OUTPUT_DIR"
+
+# Show usage information
+if [[ -f "$OUTPUT_DIR/kernel_cmdline_params.txt" ]]; then
+    echo ""
+    echo "Kernel command line parameters:"
+    echo "==============================="
+    cat "$OUTPUT_DIR/kernel_cmdline_params.txt" | grep -v '^#'
+fi
+
+echo ""
+echo "Usage:"
+echo "  firecracker --config-file $OUTPUT_DIR/firecracker_config_template.json"
