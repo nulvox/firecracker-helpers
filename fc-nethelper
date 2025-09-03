@@ -4,7 +4,7 @@ ACTION=$1
 SERVICE=$2
 BRIDGE=virbr-fc
 USER="firecracker"
-GROUP="kvm" #or use the "firecracker" group as fits your env
+GROUP="firecracker"
 
 # Use full paths for NixOS
 IP_CMD="/run/current-system/sw/bin/ip"
@@ -13,6 +13,10 @@ if [ "$ACTION" == "setup" ]; then
   # Clear out dangling devices and links
   rm -f /run/firecracker/fc-${SERVICE}.sock || true
   ${IP_CMD} link delete tap-fc${SERVICE} 2>/dev/null || true
+  ${IP_CMD} netns delete fc-${SERVICE} 2>/dev/null || true
+
+  # Create network namespace
+  ${IP_CMD} netns add fc-${SERVICE}
 
   # Create the device, add it to the bridge, and bring it up
   ${IP_CMD} tuntap add tap-fc${SERVICE} mode tap user ${USER} group ${GROUP}
@@ -20,9 +24,11 @@ if [ "$ACTION" == "setup" ]; then
   ${IP_CMD} link set tap-fc${SERVICE} up
 
 elif [ "$ACTION" == "teardown" ]; then
-  # Delete the link
+  # Delete the link and namespace
   ${IP_CMD} link delete tap-fc${SERVICE} 2>/dev/null || true
+  ${IP_CMD} netns delete fc-${SERVICE} 2>/dev/null || true
   rm -rf /run/firecracker/fc-${SERVICE}.sock
+  ${IP_CMD} netns delete fc-${SERVICE}
 
 else
   echo "Invalid action, pick 'setup' or 'teardown'"
